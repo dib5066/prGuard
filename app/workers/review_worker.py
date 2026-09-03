@@ -110,20 +110,31 @@ async def run_review(
                 account_type=account_type,
             )
 
-            if installation.deleted_at is not None or installation.suspended_at is not None:
+            # Snapshot the fields we need later. The repo-list sync below can
+            # call ``session.rollback()``, which expires every attribute on
+            # every instance in the session — and an AsyncSession cannot
+            # implicitly lazy-reload an expired attribute on access (it
+            # raises MissingGreenlet). Reading them now, while the instance
+            # is fresh, avoids that entirely.
+            installation_pk = installation.installation_id
+            installation_user_id = installation.user_id
+            installation_deleted_at = installation.deleted_at
+            installation_suspended_at = installation.suspended_at
+
+            if installation_deleted_at is not None or installation_suspended_at is not None:
                 logger.info(
                     "Installation %s for %s#%d is %s — skipping review",
                     installation_id,
                     repo_full_name,
                     pr_number,
-                    "deleted" if installation.deleted_at else "suspended",
+                    "deleted" if installation_deleted_at else "suspended",
                 )
                 await session.commit()
                 return
 
             # Refresh the accessible-repo list for linked installs so the
             # dashboard stays accurate (one GitHub call).
-            if installation.user_id is not None:
+            if installation_user_id is not None:
                 try:
                     from app.api.github_app import _sync_installation_repos
 
@@ -180,7 +191,7 @@ async def run_review(
                 github_id=repository_github_id,
                 name=repository_name,
                 full_name=repo_full_name,
-                installation_id=installation.installation_id,
+                installation_id=installation_pk,
             )
 
             # =================================================================
@@ -385,7 +396,7 @@ async def run_review(
                         ),
                         head_sha=pull_request_context.head_sha,
                         installation_id=installation_id,
-                        user_id=installation.user_id,
+                        user_id=installation_user_id,
                     )
 
                     await session.commit()
@@ -431,7 +442,7 @@ async def run_review(
                     from app.rag.context import ContextBuilder
 
                     context_builder = ContextBuilder(
-                        user_id=installation.user_id
+                        user_id=installation_user_id
                     )
                     rag_context = (
                         await context_builder.build_context(

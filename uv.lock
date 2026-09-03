@@ -299,8 +299,10 @@ dependencies = [
     { name = "langchain-text-splitters" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-postgres" },
-    { name = "psycopg", extra = ["binary"] },
+    { name = "psycopg", extra = ["binary", "pool"] },
+    { name = "pydantic-settings" },
     { name = "pyjwt", extra = ["crypto"] },
+    { name = "qdrant-client" },
     { name = "sqlalchemy" },
     { name = "tiktoken" },
 ]
@@ -323,8 +325,10 @@ requires-dist = [
     { name = "langchain-text-splitters", specifier = ">=1.1.2" },
     { name = "langgraph", specifier = ">=1.2.11" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=3.1.2" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.5" },
+    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3.5" },
+    { name = "pydantic-settings", specifier = ">=2.15.0" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.8.0" },
+    { name = "qdrant-client", specifier = ">=1.19.0" },
     { name = "sqlalchemy", specifier = ">=2.0.52" },
     { name = "tiktoken", specifier = ">=0.14.0" },
 ]
@@ -2059,6 +2063,9 @@ wheels = [
 [package.optional-dependencies]
 binary = [
     { name = "psycopg-binary", marker = "implementation_name != 'pypy'" },
+]
+pool = [
+    { name = "psycopg-pool" },
 ]
 
 [[package]]

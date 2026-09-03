@@ -107,9 +107,18 @@ class RepositoryRepository(BaseRepository[Repository]):
         """
         repository = await self.get_by_github_id(github_id)
 
+        # `repositories` has unique constraints on BOTH github_id and
+        # full_name. A row may already exist under this full_name carrying a
+        # stale/placeholder github_id (older data, or a repo re-created on
+        # GitHub with a new id). Reconcile that row — updating its github_id —
+        # instead of INSERTing and hitting repositories_full_name_key.
+        if repository is None:
+            repository = await self.get_by_full_name(full_name)
+
         if repository:
             return await self.update(
                 repository,
+                github_id=github_id,
                 name=name,
                 full_name=full_name,
                 installation_id=installation_id,

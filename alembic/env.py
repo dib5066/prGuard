@@ -82,6 +82,11 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        # Required when the URL points at a PgBouncer (transaction-mode)
+        # endpoint such as Neon's -pooler host.
+        connect_args={"statement_cache_size": 0}
+        if "+asyncpg" in config.get_main_option("sqlalchemy.url", "")
+        else {},
     )
 
     async with connectable.connect() as connection:

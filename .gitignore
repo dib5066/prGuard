@@ -1,0 +1,87 @@
+# ---------------------------------------------------------------------------
+# Secrets & local configuration  (NEVER commit)
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+private-key.pem
+*.key
+*.p12
+secrets/
+credentials.json
+
+# ---------------------------------------------------------------------------
+# Python bytecode / caches
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ---------------------------------------------------------------------------
+# Packaging / build artifacts
+# ---------------------------------------------------------------------------
+build/
+dist/
+wheels/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# ---------------------------------------------------------------------------
+# Virtual environments
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# ---------------------------------------------------------------------------
+# Test / coverage / lint / type-check caches
+# ---------------------------------------------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+.pytype/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# ---------------------------------------------------------------------------
+# Logs & local databases
+# ---------------------------------------------------------------------------
+*.log
+logs/
+*.sqlite3
+*.db
+*.db-journal
+
+# ---------------------------------------------------------------------------
+# Editor / OS noise
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+.ipynb_checkpoints/
+
+# ---------------------------------------------------------------------------
+# Project dev-only helper scripts (kept local, not needed for deployment)
+# ---------------------------------------------------------------------------
+/verify_db.py
+/verify_github.py
+/verify_phase5.py
+/verify_phase6.py
+/verify_phase7.py
+/verify_phase8.py
+/verify_pr_data.py
+/test_full_pipeline.py
+/errors.md
+/requirements.txt

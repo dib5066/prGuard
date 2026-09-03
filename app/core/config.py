@@ -9,7 +9,11 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     GITHUB_APP_ID: str
-    GITHUB_PRIVATE_KEY_PATH: str
+    # The App's RSA private key. Provide EITHER the PEM contents inline via
+    # GITHUB_PRIVATE_KEY (required on hosts with no committed key file, e.g.
+    # Railway) OR a path to a .pem file via GITHUB_PRIVATE_KEY_PATH (local dev).
+    GITHUB_PRIVATE_KEY: str = ""
+    GITHUB_PRIVATE_KEY_PATH: str = ""
     GITHUB_WEBHOOK_SECRET: str
     # The App's URL slug — github.com/apps/<slug>. Used to build the
     # "install this app" link shown to a registered user.
@@ -126,11 +130,22 @@ class Settings(BaseSettings):
 
     @property
     def github_private_key(self) -> str:
-        """Load the GitHub App private key from the configured path.
+        """The GitHub App private key (PEM).
 
-        The key is read from disk on demand and is never logged, returned
-        through an API response, or exposed to the frontend.
+        Prefers the inline ``GITHUB_PRIVATE_KEY`` env var; falls back to
+        reading ``GITHUB_PRIVATE_KEY_PATH`` from disk. A PEM pasted into an
+        env var often has its line breaks escaped as ``\\n`` — restore them.
+
+        The key is never logged, returned through an API response, or
+        exposed to the frontend.
         """
+        if self.GITHUB_PRIVATE_KEY:
+            return self.GITHUB_PRIVATE_KEY.replace("\\n", "\n")
+        if not self.GITHUB_PRIVATE_KEY_PATH:
+            raise FileNotFoundError(
+                "No GitHub App private key configured — set GITHUB_PRIVATE_KEY "
+                "(PEM contents) or GITHUB_PRIVATE_KEY_PATH (path to .pem)."
+            )
         key_path = Path(self.GITHUB_PRIVATE_KEY_PATH).expanduser()
         if not key_path.is_absolute():
             key_path = Path.cwd() / key_path

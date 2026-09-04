@@ -671,8 +671,11 @@ async def run_review(
             except Exception:
                 pass
 
-            review_record_id = locals().get("review_record")
-            review_record_id = getattr(review_record_id, "id", None)
+            # Use the plain int captured at review creation — NOT
+            # review_record.id. The rollback above expired that ORM
+            # instance, and an attribute access here would trigger an
+            # implicit lazy-load (MissingGreenlet) inside the error handler.
+            review_record_id = locals().get("review_id_for_events")
 
             if review_record_id is not None:
                 try:

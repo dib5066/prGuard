@@ -63,10 +63,23 @@ def _psycopg_dsn() -> str:
 
 # The pool can be built at import time (no event loop needed); the saver
 # cannot.
+#
+# Neon (and its PgBouncer -pooler endpoint) drop idle server connections
+# fairly aggressively; without a checkout check the pool hands back a dead
+# socket and the next query fails with "SSL connection has been closed
+# unexpectedly". `check` validates each connection on checkout and quietly
+# replaces a broken one; `max_idle`/`max_lifetime` recycle connections
+# before the server would kill them; `min_size=0` means nothing is kept
+# open between reviews.
 _pool: AsyncConnectionPool = AsyncConnectionPool(
     conninfo=_psycopg_dsn(),
+    min_size=0,
     max_size=4,
     open=False,
+    check=AsyncConnectionPool.check_connection,
+    max_idle=120.0,
+    max_lifetime=600.0,
+    reconnect_timeout=30.0,
     kwargs={
         "autocommit": True,
         "prepare_threshold": 0,

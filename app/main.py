@@ -77,9 +77,42 @@ async def _ensure_migrations() -> None:
         logger.warning("Could not ensure database migration state: %s", error)
 
 
+async def _fail_stuck_reviews() -> None:
+    """Mark reviews left in RUNNING by a previous restart/redeploy as FAILED.
+
+    Background reviews run as in-process tasks; a deploy or crash kills them
+    with no chance to record failure, so without this they hang in RUNNING
+    forever on the dashboard and in the SSE stream.
+    """
+    try:
+        from datetime import datetime, timedelta, timezone
+
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            minutes=settings.STUCK_REVIEW_MINUTES
+        )
+        async with engine.begin() as conn:
+            result = await conn.execute(
+                text(
+                    "UPDATE reviews SET status='FAILED', "
+                    "error_message='Interrupted by a server restart', "
+                    "completed_at=now() "
+                    "WHERE status='RUNNING' AND created_at < :cutoff"
+                ),
+                {"cutoff": cutoff},
+            )
+        if result.rowcount:
+            logger.warning(
+                "Marked %d stuck RUNNING review(s) as FAILED on startup",
+                result.rowcount,
+            )
+    except Exception as error:
+        logger.warning("Stuck-review sweep failed: %s", error)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await _ensure_migrations()
+    await _fail_stuck_reviews()
 
     from app.review.checkpointer import close_checkpointer, setup_checkpointer
 
@@ -114,3 +147,21 @@ app.include_router(stats_router)
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "prguard"}
+
+
+@app.get("/health/ready")
+async def readiness_check():
+    """Liveness + DB reachability — use this as the Railway health check."""
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "ok"}
+    except Exception as error:
+        from fastapi import Response
+        import json
+
+        return Response(
+            content=json.dumps({"status": "degraded", "database": str(error)}),
+            status_code=503,
+            media_type="application/json",
+        )

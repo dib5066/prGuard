@@ -45,6 +45,24 @@ router = APIRouter()
 
 _active_reviews: dict[tuple[int, str, int], "asyncio.Task[None]"] = {}
 
+# Global ceiling on reviews executing at once in this process. Created lazily
+# so it binds to the running loop. A burst of PRs otherwise fans out to N
+# repo clones + N*5 LLM calls simultaneously (memory / rate-limit / DB
+# connection exhaustion). Extra reviews queue on this and run when a slot
+# frees.
+_review_semaphore: "asyncio.Semaphore | None" = None
+
+
+def _get_review_semaphore() -> "asyncio.Semaphore":
+    global _review_semaphore
+    if _review_semaphore is None:
+        from app.core.config import settings
+
+        _review_semaphore = asyncio.Semaphore(
+            max(1, settings.MAX_CONCURRENT_REVIEWS)
+        )
+    return _review_semaphore
+
 
 async def _installation_active(installation_id: int) -> bool:
     """True unless we have a row saying the install is suspended/deleted.
@@ -462,12 +480,13 @@ async def run_review_in_background(
         # Import here to avoid circular imports.
         from app.workers.review_worker import run_review
 
-        await run_review(
-            installation_id=installation_id,
-            repo_full_name=repo_full_name,
-            pr_number=pr_number,
-            account_type=account_type,
-        )
+        async with _get_review_semaphore():
+            await run_review(
+                installation_id=installation_id,
+                repo_full_name=repo_full_name,
+                pr_number=pr_number,
+                account_type=account_type,
+            )
 
     except Exception as error:
 

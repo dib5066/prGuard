@@ -37,9 +37,26 @@ class Base(DeclarativeBase):
     pass
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency to retrieve database session."""
-    async with AsyncSessionLocal() as session:
+    """Dependency to retrieve database session.
+
+    Neon / PgBouncer can drop the underlying socket mid-request, after
+    which SQLAlchemy's own rollback-on-close raises
+    ``InterfaceError: the underlying connection is closed``. Neither the
+    defensive rollback nor the close is allowed to turn an
+    otherwise-successful response into a 500, and neither may mask the
+    real exception from the route.
+    """
+    session = AsyncSessionLocal()
+    try:
+        yield session
+    except Exception:
         try:
-            yield session
-        finally:
+            await session.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        try:
             await session.close()
+        except Exception:
+            pass

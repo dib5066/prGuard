@@ -49,13 +49,22 @@ def _authenticated_clone_url(clone_url: str, token: str) -> str:
 
 
 def _clone_and_checkout(clone_url: str, target_dir: str, head_sha: str) -> None:
-    """Blocking git clone + checkout. Run this via ``asyncio.to_thread``."""
-    repo = git.Repo.clone_from(clone_url, target_dir)
+    """Blocking shallow git clone + best-effort checkout. Run via ``asyncio.to_thread``.
+
+    A shallow (`--depth 1`) clone keeps disk and memory bounded on small
+    hosts. The clone only has the default-branch tip, so fetch the exact
+    commit separately; if that fails (host refuses by-SHA fetch, or the SHA
+    is unreachable on a fork PR) index the tip instead.
+    """
+    repo = git.Repo.clone_from(
+        clone_url, target_dir, multi_options=["--depth", "1", "--no-tags"]
+    )
+    if not head_sha:
+        return
     try:
+        repo.git.fetch("origin", head_sha, "--depth", "1")
         repo.git.checkout(head_sha)
     except git.GitCommandError:
-        # head_sha may not be reachable from the default branch tip
-        # (e.g. a fork PR). Fall back to whatever the clone checked out.
         logger.warning(
             "Could not checkout %s; indexing the default branch tip instead.",
             head_sha[:8],
@@ -262,6 +271,20 @@ class RepositoryIndexer:
                     clone_url,
                 )
 
+                return indexing_stats
+
+            if len(documents) > settings.INDEX_MAX_FILES:
+                logger.warning(
+                    "%s has %d indexable files (> INDEX_MAX_FILES=%d) — "
+                    "skipping RAG indexing to stay within memory limits.",
+                    clone_url,
+                    len(documents),
+                    settings.INDEX_MAX_FILES,
+                )
+                indexing_stats["status"] = "skipped"
+                indexing_stats["errors"].append(
+                    f"repo too large: {len(documents)} files"
+                )
                 return indexing_stats
 
             logger.info(

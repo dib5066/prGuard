@@ -24,9 +24,17 @@ class Settings(BaseSettings):
     GITHUB_CLIENT_SECRET: str = ""
 
     DATABASE_URL: str = "postgresql://dibyanshu:Dib5066@localhost:5435/prGuardDB"
-    # Run `alembic upgrade head` on startup. Convenient for local dev where
-    # the Postgres container gets recreated; set false for managed prod.
-    RUN_MIGRATIONS_ON_STARTUP: bool = True
+    # Run `alembic upgrade head` on startup. Off by default: production runs
+    # migrations from the start command (a clean subprocess), and the
+    # in-process path here nests asyncio.run() inside the lifespan loop.
+    # Set true only for local dev where the Postgres container is recreated.
+    RUN_MIGRATIONS_ON_STARTUP: bool = False
+    # On boot, mark reviews stuck in RUNNING longer than this as FAILED
+    # (they were killed by a restart/redeploy and will never resume).
+    STUCK_REVIEW_MINUTES: int = 20
+    # Hard ceiling on reviews running concurrently in this process. A burst
+    # of PRs otherwise fans out to N repo clones + N*5 LLM calls at once.
+    MAX_CONCURRENT_REVIEWS: int = 2
 
     # --- Auth / sessions -----------------------------------------------------
     # HS256 secret for the login session JWT (httpOnly cookie). MUST be set.
@@ -76,6 +84,9 @@ class Settings(BaseSettings):
     # Indexing Configuration
     INDEX_STALENESS_DAYS: int = 7
     INDEX_MAX_FILE_SIZE_KB: int = 500
+    # Skip RAG indexing entirely for repos above these limits — a full clone
+    # + load-every-file into memory OOMs a small (512 MB) container.
+    INDEX_MAX_FILES: int = 1500
     INDEX_SUPPORTED_EXTENSIONS: list[str] = [
         ".py", ".js", ".ts", ".tsx", ".jsx",
         ".go", ".java", ".rb", ".rs", ".c", ".cpp", ".h",
@@ -90,6 +101,12 @@ class Settings(BaseSettings):
     GEMINI_TIMEOUT_SECONDS: float = 60.0
     GEMINI_AGENT_CONCURRENCY: int = 2
     GEMINI_MAX_RETRIES: int = 3
+    # Prompt-size caps for the review agents. Each of the 5 agents is a
+    # separate LLM call that carries every changed file's patch, so a large
+    # PR otherwise produces a 100k+ token prompt per agent and trips
+    # per-minute rate limits. Lower these on a tight quota.
+    REVIEW_MAX_PATCH_CHARS: int = 2500
+    REVIEW_MAX_FILES_IN_PROMPT: int = 25
 
     model_config = SettingsConfigDict(
         env_file=".env",

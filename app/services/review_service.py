@@ -844,6 +844,13 @@ class ReviewService:
                 message="Running 5 specialized AI review agents...",
             )
 
+            # Commit and release the DB connection BEFORE the multi-minute
+            # LLM graph run. Otherwise this transaction sits idle for the
+            # whole run and Neon (PgBouncer + idle-in-transaction timeout +
+            # autosuspend) kills the connection, which then blows up the
+            # findings-insert below with "SSL connection has been closed".
+            await self.session.commit()
+
             # =================================================================
             # STEP 3: Build RAG context string
             # =================================================================
@@ -922,7 +929,7 @@ class ReviewService:
             # call can never wedge the review (and its DB session) forever.
             # Stream the graph so each agent's completion is pushed to the
             # frontend as it happens instead of only at the end.
-            graph_timeout = settings.GEMINI_TIMEOUT_SECONDS * 4
+            graph_timeout = settings.GEMINI_TIMEOUT_SECONDS * 6
             final_state: dict = {}
 
             async def _run_graph_streaming() -> None:

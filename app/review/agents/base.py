@@ -182,7 +182,11 @@ def build_user_prompt(
         "\n## Changed Files"
     )
 
-    for changed_file in pr_context.files:
+    max_patch = settings.REVIEW_MAX_PATCH_CHARS
+    files_for_prompt = pr_context.files[: settings.REVIEW_MAX_FILES_IN_PROMPT]
+    omitted_files = len(pr_context.files) - len(files_for_prompt)
+
+    for changed_file in files_for_prompt:
         prompt_sections.append(
             f"### {changed_file.filename} "
             f"({changed_file.status})"
@@ -193,9 +197,9 @@ def build_user_prompt(
         # --------------------------------------------------------------------
 
         if changed_file.patch:
-            file_patch = changed_file.patch[:5000]
+            file_patch = changed_file.patch[:max_patch]
 
-            if len(changed_file.patch) > 5000:
+            if len(changed_file.patch) > max_patch:
                 file_patch += "\n... (truncated)"
 
             prompt_sections.append(
@@ -205,6 +209,12 @@ def build_user_prompt(
             )
 
         prompt_sections.append("")
+
+    if omitted_files > 0:
+        prompt_sections.append(
+            f"_({omitted_files} more changed file(s) omitted to keep the "
+            f"review within its token budget.)_"
+        )
 
     # ========================================================================
     # RAG context
